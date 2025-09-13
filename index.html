@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta property="og:title" content="Telmira Ramos - Teraupeta TAP"/>
+  <meta property="og:title" content="Telmira Ramos - Terapeuta TAP"/>
   <meta property="og:description" content="Identifique suas travas mentais ressignificando seus traumas e dores emocionais"/>
   <meta property="og:url" content="https://alefnery.infy.uk"/>
-  <meta property="og:image"content="https://alefnery.infy.uk/image.png"/>
+  <meta property="og:image" content="https://alefnery.infy.uk/image.png"/>
   <meta property="og:type" content="website">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Visualizador PDF</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     body, html {
       margin: 0;
@@ -15,7 +17,13 @@
       height: 100%;
       background: black;
       overflow: hidden;
+      font-family: Arial, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
     }
+
     #start {
       display: flex;
       align-items: center;
@@ -23,32 +31,135 @@
       height: 100vh;
       background: black;
     }
+
     #start button {
       font-size: 2rem;
       padding: 1rem 2rem;
       cursor: pointer;
+      background: white;
+      border: none;
+      border-radius: 8px;
+      transition: all 0.3s ease;
     }
+
+    #start button:hover {
+      background: #f0f0f0;
+      transform: scale(1.05);
+    }
+
     #viewer {
       display: none;
       width: 100%;
       height: 100%;
       position: relative;
+      background: black;
+      overflow: hidden;
     }
-    #hint {
-      position: absolute;
-      top: 10%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 1rem 2rem;
-      border-radius: 8px;
-      font-size: 1.2rem;
-    }
-    embed {
+
+    #pages-container {
+      position: relative;
       width: 100%;
       height: 100%;
-      border: none;
+      display: flex;
+      transition: transform 0.3s ease;
+    }
+
+    .pdf-page {
+      flex-shrink: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: black;
+    }
+
+    .pdf-page canvas {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 25px;
+      font-size: 1rem;
+      z-index: 1000;
+      animation: pulse 2s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 1.2rem;
+      z-index: 100;
+    }
+
+    .loading-spinner {
+      border: 3px solid #333;
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Navegação invisível */
+    .nav-area {
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 100%;
+      z-index: 10;
+      cursor: pointer;
+    }
+
+    .nav-left {
+      left: 0;
+    }
+
+    .nav-right {
+      right: 0;
+    }
+
+    /* Indicador de página */
+    #page-indicator {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .show-indicator {
+      opacity: 1;
     }
   </style>
 </head>
@@ -60,19 +171,42 @@
 
   <!-- Viewer PDF -->
   <div id="viewer">
-    <embed src="meuarquivo.pdf" type="application/pdf">
+    <div id="loading">
+      <div class="loading-spinner"></div>
+      Carregando PDF...
+    </div>
+    <div id="page-indicator">1 / 1</div>
+    <div id="pages-container"></div>
     <div id="hint"></div>
+    <div class="nav-area nav-left" onclick="previousPage()"></div>
+    <div class="nav-area nav-right" onclick="nextPage()"></div>
   </div>
 
   <script>
-    function enterApp() {
+    let pdfDoc = null;
+    let currentPage = 1;
+    let totalPages = 0;
+    let isLoading = false;
+    let hasInteracted = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const MIN_SWIPE_DISTANCE = 50;
+
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    async function enterApp() {
       // Entrar em fullscreen
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen();
-      } else if (document.documentElement.webkitRequestFullscreen) {
-        document.documentElement.webkitRequestFullscreen();
-      } else if (document.documentElement.msRequestFullscreen) {
-        document.documentElement.msRequestFullscreen();
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+          await document.documentElement.msRequestFullscreen();
+        }
+      } catch (e) {
+        console.log('Fullscreen não disponível:', e);
       }
 
       // Esconde tela inicial e mostra viewer
@@ -81,22 +215,187 @@
 
       // Detecta dispositivo para mensagem
       const hint = document.getElementById("hint");
-      if (/Mobi|Android/i.test(navigator.userAgent)) {
-        hint.innerText = "Deslize para próxima página";
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        hint.innerText = "Deslize para direita";
       } else {
-        hint.innerText = "Clique no lado para a próxima página";
+        hint.innerText = "Clique à direita";
       }
 
-      // Remove a dica na primeira interação
-      function hideHint() {
-        hint.style.display = "none";
-        document.removeEventListener("click", hideHint);
-        document.removeEventListener("touchstart", hideHint);
-        document.removeEventListener("keydown", hideHint);
+      // Setup event listeners
+      setupEventListeners();
+      
+      // Carrega o PDF (substitua 'meuarquivo.pdf' pelo caminho do seu PDF)
+      await loadPDF('meuarquivo.pdf');
+    }
+
+    function setupEventListeners() {
+      // Touch events para mobile
+      document.addEventListener('touchstart', handleTouchStart, { passive: false });
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd, { passive: false });
+      
+      // Click events para desktop
+      document.addEventListener('click', hideHintOnInteraction);
+      document.addEventListener('touchstart', hideHintOnInteraction);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    function handleTouchStart(e) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault(); // Previne scroll
+    }
+
+    function handleTouchEnd(e) {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      
+      const diffX = touchStartX - touchEndX;
+      const diffY = touchStartY - touchEndY;
+      
+      // Verifica se é um swipe horizontal
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > MIN_SWIPE_DISTANCE) {
+        if (diffX > 0) {
+          // Swipe left (próxima página)
+          nextPage();
+        } else {
+          // Swipe right (página anterior)
+          previousPage();
+        }
       }
-      document.addEventListener("click", hideHint);
-      document.addEventListener("touchstart", hideHint);
-      document.addEventListener("keydown", hideHint);
+    }
+
+    function handleKeyDown(e) {
+      switch(e.key) {
+        case 'ArrowRight':
+        case ' ':
+          nextPage();
+          break;
+        case 'ArrowLeft':
+          previousPage();
+          break;
+        case 'Escape':
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          }
+          break;
+      }
+    }
+
+    function hideHintOnInteraction() {
+      if (!hasInteracted) {
+        hasInteracted = true;
+        document.getElementById('hint').style.display = 'none';
+      }
+    }
+
+    async function loadPDF(url) {
+      try {
+        isLoading = true;
+        const loadingDiv = document.getElementById('loading');
+        loadingDiv.style.display = 'block';
+        
+        pdfDoc = await pdfjsLib.getDocument(url).promise;
+        totalPages = pdfDoc.numPages;
+        
+        await renderAllPages();
+        updatePageIndicator();
+        
+        loadingDiv.style.display = 'none';
+        isLoading = false;
+      } catch (error) {
+        console.error('Erro ao carregar PDF:', error);
+        document.getElementById('loading').innerHTML = 'Erro ao carregar PDF';
+      }
+    }
+
+    async function renderAllPages() {
+      const container = document.getElementById('pages-container');
+      container.innerHTML = '';
+      
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdf-page';
+        pageDiv.id = `page-${pageNum}`;
+        
+        const canvas = document.createElement('canvas');
+        pageDiv.appendChild(canvas);
+        container.appendChild(pageDiv);
+        
+        await renderPage(pageNum, canvas);
+      }
+    }
+
+    async function renderPage(pageNum, canvas) {
+      try {
+        const page = await pdfDoc.getPage(pageNum);
+        const context = canvas.getContext('2d');
+        
+        // Calcula escala baseada no tamanho da tela
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(
+          window.innerWidth / viewport.width,
+          window.innerHeight / viewport.height
+        );
+        
+        const scaledViewport = page.getViewport({ scale });
+        
+        canvas.height = scaledViewport.height;
+        canvas.width = scaledViewport.width;
+        
+        const renderContext = {
+          canvasContext: context,
+          viewport: scaledViewport
+        };
+        
+        await page.render(renderContext).promise;
+      } catch (error) {
+        console.error(`Erro ao renderizar página ${pageNum}:`, error);
+      }
+    }
+
+    function nextPage() {
+      if (currentPage < totalPages && !isLoading) {
+        currentPage++;
+        updateView();
+        showPageIndicator();
+      }
+      hideHintOnInteraction();
+    }
+
+    function previousPage() {
+      if (currentPage > 1 && !isLoading) {
+        currentPage--;
+        updateView();
+        showPageIndicator();
+      }
+      hideHintOnInteraction();
+    }
+
+    function updateView() {
+      const container = document.getElementById('pages-container');
+      const translateX = -(currentPage - 1) * 100;
+      container.style.transform = `translateX(${translateX}%)`;
+      updatePageIndicator();
+    }
+
+    function updatePageIndicator() {
+      const indicator = document.getElementById('page-indicator');
+      indicator.textContent = `${currentPage} / ${totalPages}`;
+    }
+
+    function showPageIndicator() {
+      const indicator = document.getElementById('page-indicator');
+      indicator.classList.add('show-indicator');
+      
+      setTimeout(() => {
+        indicator.classList.remove('show-indicator');
+      }, 2000);
     }
   </script>
 </body>
