@@ -178,7 +178,7 @@
   <div id="viewer">
     <div id="loading">
       <div class="loading-spinner"></div>
-      Carregando PDF...
+      Carregando...
     </div>
     <div id="page-indicator">1 / 1</div>
     <div id="pages-container"></div>
@@ -242,8 +242,8 @@
       document.addEventListener('touchend', handleTouchEnd, { passive: false });
       
       // Click events para desktop
-      document.addEventListener('click', hideHintOnInteraction);
-      document.addEventListener('touchstart', hideHintOnInteraction);
+      //document.addEventListener('click', hideHintOnInteraction);
+      //document.addEventListener('touchstart', hideHintOnInteraction);
       document.addEventListener('keydown', handleKeyDown);
     }
 
