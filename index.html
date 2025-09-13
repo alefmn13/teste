@@ -36,15 +36,17 @@
       font-size: 2rem;
       padding: 1rem 2rem;
       cursor: pointer;
-      background: white;
+      background: #6b19a6;
       border: none;
       border-radius: 8px;
       transition: all 0.3s ease;
+      box-shadow: 0 0 25px rgba(158, 41, 242, 0.6), 0 0 50px rgba(158, 41, 242, 0.5), 0 0 75px rgba(158, 41, 242, 0.4);
     }
 
     #start button:hover {
-      background: #f0f0f0;
+      background: #541582;
       transform: scale(1.05);
+      box-shadow: 0 0 25px rgba(158, 41, 242, 0.4), 0 0 50px rgba(158, 41, 242, 0.3), 0 0 75px rgba(158, 41, 242, 0.2);
     }
 
     #viewer {
@@ -173,7 +175,7 @@
   <div id="viewer">
     <div id="loading">
       <div class="loading-spinner"></div>
-      Carregando...
+      Carregando PDF...
     </div>
     <div id="page-indicator">1 / 1</div>
     <div id="pages-container"></div>
@@ -237,8 +239,8 @@
       document.addEventListener('touchend', handleTouchEnd, { passive: false });
       
       // Click events para desktop
-      //document.addEventListener('click', hideHintOnInteraction);
-      //document.addEventListener('touchstart', hideHintOnInteraction);
+      document.addEventListener('click', hideHintOnInteraction);
+      document.addEventListener('touchstart', hideHintOnInteraction);
       document.addEventListener('keydown', handleKeyDown);
     }
 
